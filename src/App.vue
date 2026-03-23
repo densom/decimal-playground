@@ -15,7 +15,7 @@ const dragFill = ref(true) // true = painting, false = erasing
 const MODES = {
   tenths:      { denom: 10,   cols: 1,  rows: 10,  label: 'Tenths',      sub: '÷ 10',  places: 1 },
   hundredths:  { denom: 100,  cols: 10, rows: 10,  label: 'Hundredths',  sub: '÷ 100', places: 2 },
-  thousandths: { denom: 1000, cols: 20, rows: 50,  label: 'Thousandths', sub: '÷ 1000',places: 3 },
+  thousandths: { denom: 1000, cols: 10, rows: 100, label: 'Thousandths', sub: '÷ 1000',places: 3 },
 }
 
 const cfg = computed(() => MODES[mode.value])
@@ -252,14 +252,26 @@ function reset() {
 }
 
 // ── Cell visual grouping ──────────────────────────────────────────────────────
+// Hundredths (10×10): each row of 10 = 1 tenth → alternate tint per row
+// Thousandths (10×100): rows from tenths visible, squares from hundredths visible.
+//   - tenths group = every 10 rows → bold bottom border
+//   - hundredths group = every 1 row → medium border (CSS), alternate tint per 10-row band
 function getCellClasses(i) {
   const classes = { 'cell--filled': filledCells.value.has(i) }
-  if (mode.value === 'thousandths') {
-    const row = Math.floor(i / 20)
-    const col = i % 20
-    if (row % 5 === 4)  classes['cell--tenth-bottom'] = true
-    if (col === 9)      classes['cell--hundredth-right'] = true
+
+  if (mode.value === 'hundredths') {
+    // Alternate tint on odd tenth-rows so the 10 strips pop visually
+    if (Math.floor(i / 10) % 2 === 1) classes['cell--alt-tenth'] = true
   }
+
+  if (mode.value === 'thousandths') {
+    const row = Math.floor(i / 10)          // 0–99
+    // Bold border at the bottom of each tenth group (every 10 rows)
+    if (row % 10 === 9) classes['cell--tenth-bottom'] = true
+    // Alternate tint on odd tenth-bands (same visual language as hundredths)
+    if (Math.floor(i / 100) % 2 === 1) classes['cell--alt-tenth'] = true
+  }
+
   return classes
 }
 
@@ -660,19 +672,25 @@ html, body {
 
 /* ── Grouping indicators ─────────────────────────────────────────────────── */
 
-/* Hundredths mode: each row = 1 tenth → bold bottom border on every row */
+/* Hundredths: each row of 10 cells = 1 tenth → bold bottom border on every row */
 .grid--hundredths .cell {
-  border-bottom: 2px solid rgba(94, 33, 163, 0.55);
+  border-bottom: 3px solid rgba(46, 16, 101, 0.5);
 }
 
-/* Thousandths mode: tenths = every 5 rows */
+/* Thousandths: each row = 1 hundredth → light bottom border on every row */
+.grid--thousandths .cell {
+  border-right:  1px solid rgba(46, 16, 101, 0.12);
+  border-bottom: 1px solid rgba(46, 16, 101, 0.22);
+}
+
+/* Thousandths: bold border at the bottom of every tenth-group (every 10 rows) */
 .cell--tenth-bottom {
-  border-bottom: 3px solid #5B21B6 !important;
+  border-bottom: 3px solid rgba(46, 16, 101, 0.55) !important;
 }
 
-/* Thousandths mode: hundredths = groups of 10 in each row (left/right half) */
-.cell--hundredth-right {
-  border-right: 2px solid rgba(124, 58, 237, 0.6) !important;
+/* Alternating tenth-band tint (both hundredths and thousandths modes) */
+.cell--alt-tenth:not(.cell--filled) {
+  background: rgba(109, 40, 217, 0.1);
 }
 
 .cell::after {
