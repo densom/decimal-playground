@@ -61,13 +61,23 @@ function setMode(m) {
 // ── Cluster mode ──────────────────────────────────────────────────────────────
 const clusterMode = ref(false)
 
-// Flying ball animation state
-// { fromX, fromY, toX, toY } — positions relative to grid-outer top-left
-const flyAnim = ref(null)
+// Flying cell animation state
+const flyAnim    = ref(null)
+const isFlying   = ref(false)   // lock: ignore clicks during animation
+const flyTimer   = ref(null)    // pending setTimeout handle
 const gridOuterRef = ref(null)
 const cellRefs = ref([])
 
-watch(denominator, () => { cellRefs.value = [] })
+watch(denominator, () => { cancelFly(); cellRefs.value = [] })
+
+watch(clusterMode, (on) => {
+  if (!on) return
+  // Snap any scattered cells into a contiguous cluster at the start
+  const count = filledCells.value.size
+  const next = new Set()
+  for (let i = 0; i < count; i++) next.add(i)
+  filledCells.value = next
+})
 
 function setCellRef(el, i) {
   if (el) cellRefs.value[i] = el
@@ -85,12 +95,18 @@ function cellCenter(index) {
   }
 }
 
+function cancelFly() {
+  if (flyTimer.value) { clearTimeout(flyTimer.value); flyTimer.value = null }
+  flyAnim.value = null
+  isFlying.value = false
+}
+
 async function triggerFly(fromIdx, toIdx) {
   const fromEl = cellRefs.value[fromIdx]
   const toEl   = cellRefs.value[toIdx]
   const grid   = gridOuterRef.value
   if (!fromEl || !toEl || !grid) {
-    // No DOM refs yet — just swap instantly
+    // No DOM refs — swap instantly
     const next = new Set(filledCells.value)
     next.delete(fromIdx)
     next.add(toIdx)
@@ -99,6 +115,8 @@ async function triggerFly(fromIdx, toIdx) {
     return
   }
 
+  isFlying.value = true
+
   const gr = grid.getBoundingClientRect()
   const fr = fromEl.getBoundingClientRect()
   const tr = toEl.getBoundingClientRect()
@@ -106,28 +124,30 @@ async function triggerFly(fromIdx, toIdx) {
   const tx = tr.left - gr.left,  ty = tr.top - gr.top
   const w  = fr.width,            h  = fr.height
 
-  // 1. Show clicked cell as filled so the kid sees it "selected"
+  // 1. Flash the clicked cell as filled
   const s1 = new Set(filledCells.value)
   s1.add(fromIdx)
   filledCells.value = s1
 
-  // 2. Spawn the flying clone at the exact same position (invisible overlap)
+  // 2. Spawn the flying clone at the exact same position
   flyAnim.value = { x: fx, y: fy, w, h, moving: false }
   await nextTick()
 
-  // 3. Unmark the source cell — the clone visually takes its place
+  // 3. Unmark source — clone visually takes its place
   const s2 = new Set(filledCells.value)
   s2.delete(fromIdx)
   filledCells.value = s2
 
-  // 4. Two animation frames give the browser time to paint before transition fires
+  // 4. Two rAF ticks so the browser paints the clone before the transition fires
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (flyAnim.value) flyAnim.value = { x: tx, y: ty, w, h, moving: true }
   }))
 
-  // 5. Land: hide clone, mark target cell as filled
-  setTimeout(() => {
+  // 5. Land: fill target, release lock
+  flyTimer.value = setTimeout(() => {
     flyAnim.value = null
+    isFlying.value = false
+    flyTimer.value = null
     const s3 = new Set(filledCells.value)
     s3.add(toIdx)
     filledCells.value = s3
@@ -143,6 +163,7 @@ function startDrag(i) {
 
   if (clusterMode.value) {
     isDragging.value = false
+    if (isFlying.value) return   // ignore clicks mid-animation
     const clusterSize = filledCells.value.size
     if (!alreadyFilled) {
       const target = clusterSize
@@ -430,6 +451,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
 
 html, body {
   height: 100%;
+  overflow: hidden;
   background: var(--cream);
   color: var(--text);
   font-family: 'Nunito', sans-serif;
@@ -437,14 +459,16 @@ html, body {
 }
 
 #app {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 /* ── App shell ────────────────────────────────────────────────────────────── */
 .app {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background:
@@ -455,13 +479,14 @@ html, body {
 
 /* ── Header ───────────────────────────────────────────────────────────────── */
 .header {
-  padding: 20px 32px 16px;
+  padding: 10px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 2px solid var(--tan);
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */
@@ -501,21 +526,21 @@ html, body {
 }
 
 .logo-icon {
-  font-size: 36px;
+  font-size: 28px;
   line-height: 1;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
 }
 
 .logo h1 {
   font-family: 'Fredoka One', cursive;
-  font-size: 28px;
+  font-size: 22px;
   color: var(--navy);
   letter-spacing: 0.5px;
   line-height: 1;
 }
 
 .tagline {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--text-muted);
   font-weight: 600;
   margin-top: 2px;
@@ -526,22 +551,23 @@ html, body {
 /* ── Layout ───────────────────────────────────────────────────────────────── */
 .layout {
   flex: 1;
+  min-height: 0;
   display: flex;
+  padding: 16px 24px 20px;
   gap: 0;
-  padding: 32px;
-  align-items: flex-start;
-  max-width: 1100px;
-  margin: 0 auto;
   width: 100%;
+  overflow: hidden;
 }
 
 /* ── Grid section ─────────────────────────────────────────────────────────── */
 .grid-section {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
 }
 
 .grid-label {
@@ -562,8 +588,15 @@ html, body {
 }
 
 .grid-outer {
-  width: 420px;
-  height: 420px;
+  /* Fill as much space as possible while remaining square */
+  --panel-w: clamp(300px, 27vw, 420px);
+  --grid-size: min(
+    calc(100vh - 160px),
+    calc(100vw - var(--panel-w) - 80px),
+    820px
+  );
+  width: var(--grid-size);
+  height: var(--grid-size);
   border-radius: 4px;
   overflow: hidden;
   box-shadow:
@@ -656,7 +689,7 @@ html, body {
 }
 
 .grid-hint {
-  font-size: 14px;
+  font-size: clamp(13px, 1.4vw, 18px);
   color: var(--text-muted);
   font-weight: 600;
   text-align: center;
@@ -668,12 +701,15 @@ html, body {
 
 /* ── Panel ────────────────────────────────────────────────────────────────── */
 .panel {
-  width: 320px;
+  width: clamp(300px, 27vw, 420px);
   flex-shrink: 0;
-  margin-left: 40px;
+  margin-left: clamp(20px, 2.5vw, 48px);
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: clamp(12px, 1.6vh, 22px);
+  overflow-y: auto;
+  max-height: 100%;
+  padding-right: 4px;
 }
 
 .section-label {
@@ -721,7 +757,7 @@ html, body {
 
 .mode-name {
   font-weight: 800;
-  font-size: 15px;
+  font-size: clamp(14px, 1.4vw, 18px);
 }
 
 .mode-denom {
@@ -751,13 +787,13 @@ html, body {
 
 .frac-num, .frac-den {
   font-family: 'Fredoka One', cursive;
-  font-size: 32px;
+  font-size: clamp(28px, 3.5vw, 52px);
   color: var(--white);
   line-height: 1;
 }
 
 .frac-bar {
-  width: 40px;
+  width: clamp(36px, 4vw, 56px);
   height: 3px;
   background: var(--yellow);
   border-radius: 2px;
@@ -766,7 +802,7 @@ html, body {
 
 .readout-equals {
   font-family: 'Fredoka One', cursive;
-  font-size: 28px;
+  font-size: clamp(24px, 3vw, 44px);
   color: var(--yellow);
   flex-shrink: 0;
 }
@@ -781,14 +817,14 @@ html, body {
 
 .decimal-big {
   font-family: 'Fredoka One', cursive;
-  font-size: 42px;
+  font-size: clamp(40px, 5.5vw, 80px);
   color: var(--yellow);
   line-height: 1;
   letter-spacing: 1px;
 }
 
 .percent-tag {
-  font-size: 14px;
+  font-size: clamp(13px, 1.4vw, 20px);
   font-weight: 700;
   color: rgba(255,255,255,0.5);
   background: rgba(255,255,255,0.1);
@@ -817,7 +853,7 @@ html, body {
 
 .simplified-frac {
   font-family: 'Fredoka One', cursive;
-  font-size: 22px;
+  font-size: clamp(20px, 2.2vw, 30px);
   color: var(--navy);
   display: flex;
   align-items: center;
@@ -1034,19 +1070,22 @@ html, body {
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
+  html, body, #app, .app { overflow: auto; height: auto; }
   .layout {
     flex-direction: column;
     align-items: center;
-    padding: 20px 16px;
+    padding: 16px;
+    overflow: visible;
   }
   .panel {
     width: 100%;
-    max-width: 420px;
+    max-width: 480px;
     margin-left: 0;
+    overflow-y: visible;
+    max-height: none;
   }
   .grid-outer {
-    width: 360px;
-    height: 360px;
+    --grid-size: min(90vw, 480px) !important;
   }
 }
 </style>
