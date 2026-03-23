@@ -325,15 +325,56 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
           />
         </div>
 
-        <!-- Quick hints below grid -->
-        <div class="grid-hint">
-          <span v-if="mode === 'tenths'">Each strip = <strong>1 tenth</strong> = <strong>0.1</strong></span>
-          <span v-else-if="mode === 'hundredths'">Each square = <strong>1 hundredth</strong> = <strong>0.01</strong></span>
-          <span v-else>Each tiny square = <strong>1 thousandth</strong> = <strong>0.001</strong></span>
+        <!-- Hint + grid controls sit below the square, matching its width -->
+        <div class="grid-footer">
+          <div class="grid-hint">
+            <span v-if="mode === 'tenths'">Each strip = <strong>1 tenth</strong> = <strong>0.1</strong></span>
+            <span v-else-if="mode === 'hundredths'">Each square = <strong>1 hundredth</strong> = <strong>0.01</strong></span>
+            <span v-else>Each tiny square = <strong>1 thousandth</strong> = <strong>0.001</strong></span>
+          </div>
+
+          <!-- Controls row: type input · quick fills · cluster toggle -->
+          <div class="grid-controls">
+
+            <div class="gc-input">
+              <input
+                v-model="inputText"
+                @keydown="handleInputKey"
+                @blur="applyInput"
+                placeholder="Type 0.5 or 3/4…"
+                class="number-input"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+              />
+              <button class="show-btn" @click="applyInput">Show it!</button>
+            </div>
+
+            <div class="gc-divider" />
+
+            <div class="gc-fills">
+              <button class="quick-btn" @click="fillHalf">½</button>
+              <button class="quick-btn" @click="fillQuarter">¼</button>
+              <button class="quick-btn reset" @click="reset">Clear</button>
+            </div>
+
+            <div class="gc-divider" />
+
+            <div class="cluster-toggle" @click="clusterMode = !clusterMode" :class="{ 'cluster-toggle--on': clusterMode }">
+              <div class="cluster-toggle-text">
+                <span class="cluster-toggle-label">Keep together</span>
+                <span class="cluster-toggle-sub">{{ clusterMode ? 'On' : 'Off' }}</span>
+              </div>
+              <div class="toggle-pill">
+                <div class="toggle-knob" />
+              </div>
+            </div>
+
+          </div>
         </div>
       </section>
 
-      <!-- ── Right: Controls ────────────────────────────────────── -->
+      <!-- ── Right: "What is this number?" panel ────────────────── -->
       <aside class="panel">
 
         <!-- Mode switcher -->
@@ -360,9 +401,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
             <span class="frac-bar"></span>
             <span class="frac-den">{{ denominator }}</span>
           </div>
-
           <div class="readout-equals">=</div>
-
           <div class="readout-right">
             <div class="decimal-big">{{ decimalValue }}</div>
             <div class="percent-tag">{{ percentValue }}%</div>
@@ -380,45 +419,6 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
             </span>
           </div>
         </Transition>
-
-        <!-- Type a number -->
-        <div class="input-section">
-          <p class="section-label">Type a decimal or fraction:</p>
-          <div class="input-row">
-            <input
-              v-model="inputText"
-              @keydown="handleInputKey"
-              @blur="applyInput"
-              placeholder="e.g. 0.5 or 1/4"
-              class="number-input"
-              type="text"
-              inputmode="decimal"
-              autocomplete="off"
-            />
-            <button class="show-btn" @click="applyInput">Show it!</button>
-          </div>
-        </div>
-
-        <!-- Quick fills -->
-        <div class="quick-fills">
-          <p class="section-label">Quick fills:</p>
-          <div class="quick-buttons">
-            <button class="quick-btn" @click="fillHalf">½</button>
-            <button class="quick-btn" @click="fillQuarter">¼</button>
-            <button class="quick-btn reset" @click="reset">Clear</button>
-          </div>
-        </div>
-
-        <!-- Cluster mode toggle -->
-        <div class="cluster-toggle" @click="clusterMode = !clusterMode" :class="{ 'cluster-toggle--on': clusterMode }">
-          <div class="cluster-toggle-text">
-            <span class="cluster-toggle-label">Keep cells together</span>
-            <span class="cluster-toggle-sub">{{ clusterMode ? 'Cells snap to the cluster' : 'Click any cell freely' }}</span>
-          </div>
-          <div class="toggle-pill">
-            <div class="toggle-knob" />
-          </div>
-        </div>
 
       </aside>
     </div>
@@ -561,12 +561,16 @@ html, body {
 
 /* ── Grid section ─────────────────────────────────────────────────────────── */
 .grid-section {
+  /* Define --grid-size here so both grid-outer and grid-footer can share it */
+  --panel-w: clamp(300px, 27vw, 380px);
+  --grid-size: min(calc(100vh - 320px), calc(100vw - var(--panel-w) - 80px), 820px);
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 8px;
   gap: 10px;
 }
 
@@ -588,15 +592,8 @@ html, body {
 }
 
 .grid-outer {
-  /* Fill as much space as possible while remaining square */
-  --panel-w: clamp(300px, 27vw, 420px);
-  --grid-size: min(
-    calc(100vh - 160px),
-    calc(100vw - var(--panel-w) - 80px),
-    820px
-  );
   width: var(--grid-size);
-  height: var(--grid-size);
+  aspect-ratio: 1;
   border-radius: 4px;
   overflow: hidden;
   box-shadow:
@@ -688,6 +685,13 @@ html, body {
   transform: scale(1.04);
 }
 
+.grid-footer {
+  width: var(--grid-size);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .grid-hint {
   font-size: clamp(13px, 1.4vw, 18px);
   color: var(--text-muted);
@@ -699,17 +703,50 @@ html, body {
   color: var(--cell-filled);
 }
 
+/* ── Grid controls (below the square) ────────────────────────────────────── */
+.grid-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--white);
+  border: 2px solid var(--tan);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+
+.gc-input {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.gc-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--tan);
+  flex-shrink: 0;
+}
+
+.gc-fills {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* ── Panel ────────────────────────────────────────────────────────────────── */
 .panel {
-  width: clamp(300px, 27vw, 420px);
+  width: clamp(280px, 27vw, 380px);
   flex-shrink: 0;
-  margin-left: clamp(20px, 2.5vw, 48px);
+  margin-left: clamp(20px, 2.5vw, 44px);
   display: flex;
   flex-direction: column;
-  gap: clamp(12px, 1.6vh, 22px);
+  gap: clamp(16px, 2vh, 28px);
   overflow-y: auto;
   max-height: 100%;
   padding-right: 4px;
+  justify-content: flex-start;
+  padding-top: 8px;
 }
 
 .section-label {
@@ -874,6 +911,7 @@ html, body {
 
 .number-input {
   flex: 1;
+  min-width: 0;
   padding: 10px 14px;
   font-family: 'Nunito', sans-serif;
   font-size: 16px;
@@ -897,6 +935,7 @@ html, body {
 }
 
 .show-btn {
+  flex-shrink: 0;
   padding: 10px 18px;
   background: var(--blue);
   color: var(--white);
@@ -990,41 +1029,38 @@ html, body {
 .cluster-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--white);
-  border: 2px solid var(--tan);
-  border-radius: 12px;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .cluster-toggle:hover {
-  border-color: var(--cell-filled);
+  background: var(--cream-dark);
 }
 
 .cluster-toggle--on {
   background: var(--blue-light);
-  border-color: var(--cell-filled);
-  box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
 }
 
 .cluster-toggle-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .cluster-toggle-label {
-  font-size: 14px;
+  font-size: clamp(11px, 1.1vw, 13px);
   font-weight: 800;
   color: var(--navy);
+  white-space: nowrap;
 }
 
 .cluster-toggle-sub {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -1079,13 +1115,20 @@ html, body {
   }
   .panel {
     width: 100%;
-    max-width: 480px;
+    max-width: 520px;
     margin-left: 0;
     overflow-y: visible;
     max-height: none;
+    justify-content: flex-start;
   }
-  .grid-outer {
-    --grid-size: min(90vw, 480px) !important;
+  .grid-section {
+    --grid-size: min(90vw, 520px) !important;
+  }
+  .grid-controls {
+    flex-wrap: wrap;
+  }
+  .gc-divider {
+    display: none;
   }
 }
 </style>
