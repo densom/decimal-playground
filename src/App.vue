@@ -15,7 +15,7 @@ const dragFill = ref(true) // true = painting, false = erasing
 const MODES = {
   tenths:      { denom: 10,   cols: 1,  rows: 10,  label: 'Tenths',      sub: '÷ 10',  places: 1 },
   hundredths:  { denom: 100,  cols: 10, rows: 10,  label: 'Hundredths',  sub: '÷ 100', places: 2 },
-  thousandths: { denom: 1000, cols: 25, rows: 40,  label: 'Thousandths', sub: '÷ 1000',places: 3 },
+  thousandths: { denom: 1000, cols: 20, rows: 50,  label: 'Thousandths', sub: '÷ 1000',places: 3 },
 }
 
 const cfg = computed(() => MODES[mode.value])
@@ -251,6 +251,18 @@ function reset() {
   inputText.value = ''
 }
 
+// ── Cell visual grouping ──────────────────────────────────────────────────────
+function getCellClasses(i) {
+  const classes = { 'cell--filled': filledCells.value.has(i) }
+  if (mode.value === 'thousandths') {
+    const row = Math.floor(i / 20)
+    const col = i % 20
+    if (row % 5 === 4)  classes['cell--tenth-bottom'] = true
+    if (col === 9)      classes['cell--hundredth-right'] = true
+  }
+  return classes
+}
+
 // ── Global drag stop ──────────────────────────────────────────────────────────
 onMounted(() => window.addEventListener('mouseup', stopDrag))
 onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
@@ -304,7 +316,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
                 :key="i"
                 :ref="el => setCellRef(el, i - 1)"
                 class="cell"
-                :class="{ 'cell--filled': filledCells.has(i - 1) }"
+                :class="getCellClasses(i - 1)"
                 @mousedown.prevent="startDrag(i - 1)"
                 @mouseenter="onEnter(i - 1)"
               />
@@ -646,6 +658,23 @@ html, body {
   border-bottom: 1px solid rgba(46,16,101,0.15);
 }
 
+/* ── Grouping indicators ─────────────────────────────────────────────────── */
+
+/* Hundredths mode: each row = 1 tenth → bold bottom border on every row */
+.grid--hundredths .cell {
+  border-bottom: 2px solid rgba(94, 33, 163, 0.55);
+}
+
+/* Thousandths mode: tenths = every 5 rows */
+.cell--tenth-bottom {
+  border-bottom: 3px solid #5B21B6 !important;
+}
+
+/* Thousandths mode: hundredths = groups of 10 in each row (left/right half) */
+.cell--hundredth-right {
+  border-right: 2px solid rgba(124, 58, 237, 0.6) !important;
+}
+
 .cell::after {
   content: '';
   position: absolute;
@@ -916,7 +945,7 @@ html, body {
 
 .number-input {
   flex: 1;
-  min-width: 0;
+  min-width: 80px;
   padding: 10px 14px;
   font-family: 'Nunito', sans-serif;
   font-size: 16px;
