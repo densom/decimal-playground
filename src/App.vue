@@ -846,6 +846,7 @@ html, body {
 
 .readout-right {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -854,10 +855,14 @@ html, body {
 
 .decimal-big {
   font-family: 'Fredoka One', cursive;
-  font-size: clamp(40px, 5.5vw, 80px);
+  font-size: clamp(24px, 3vw, 48px);
   color: var(--yellow);
   line-height: 1;
   letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .percent-tag {
