@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import LcdExplorer from './components/LcdExplorer.vue'
 
 const activeTab = ref('explore') // 'explore' | 'lcd'
@@ -58,15 +58,119 @@ function setMode(m) {
   inputText.value = (scaled / newDenom).toFixed(MODES[m].places)
 }
 
+// ── Cluster mode ──────────────────────────────────────────────────────────────
+const clusterMode = ref(false)
+
+// Flying ball animation state
+// { fromX, fromY, toX, toY } — positions relative to grid-outer top-left
+const flyAnim = ref(null)
+const gridOuterRef = ref(null)
+const cellRefs = ref([])
+
+watch(denominator, () => { cellRefs.value = [] })
+
+function setCellRef(el, i) {
+  if (el) cellRefs.value[i] = el
+}
+
+function cellCenter(index) {
+  const el = cellRefs.value[index]
+  const grid = gridOuterRef.value
+  if (!el || !grid) return null
+  const gr = grid.getBoundingClientRect()
+  const cr = el.getBoundingClientRect()
+  return {
+    x: cr.left - gr.left + cr.width / 2,
+    y: cr.top  - gr.top  + cr.height / 2,
+  }
+}
+
+async function triggerFly(fromIdx, toIdx) {
+  const fromEl = cellRefs.value[fromIdx]
+  const toEl   = cellRefs.value[toIdx]
+  const grid   = gridOuterRef.value
+  if (!fromEl || !toEl || !grid) {
+    // No DOM refs yet — just swap instantly
+    const next = new Set(filledCells.value)
+    next.delete(fromIdx)
+    next.add(toIdx)
+    filledCells.value = next
+    inputText.value = (next.size / denominator.value).toFixed(cfg.value.places)
+    return
+  }
+
+  const gr = grid.getBoundingClientRect()
+  const fr = fromEl.getBoundingClientRect()
+  const tr = toEl.getBoundingClientRect()
+  const fx = fr.left - gr.left,  fy = fr.top - gr.top
+  const tx = tr.left - gr.left,  ty = tr.top - gr.top
+  const w  = fr.width,            h  = fr.height
+
+  // 1. Show clicked cell as filled so the kid sees it "selected"
+  const s1 = new Set(filledCells.value)
+  s1.add(fromIdx)
+  filledCells.value = s1
+
+  // 2. Spawn the flying clone at the exact same position (invisible overlap)
+  flyAnim.value = { x: fx, y: fy, w, h, moving: false }
+  await nextTick()
+
+  // 3. Unmark the source cell — the clone visually takes its place
+  const s2 = new Set(filledCells.value)
+  s2.delete(fromIdx)
+  filledCells.value = s2
+
+  // 4. Two animation frames give the browser time to paint before transition fires
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (flyAnim.value) flyAnim.value = { x: tx, y: ty, w, h, moving: true }
+  }))
+
+  // 5. Land: hide clone, mark target cell as filled
+  setTimeout(() => {
+    flyAnim.value = null
+    const s3 = new Set(filledCells.value)
+    s3.add(toIdx)
+    filledCells.value = s3
+    inputText.value = (s3.size / denominator.value).toFixed(cfg.value.places)
+  }, 480)
+}
+
 // ── Cell interaction ──────────────────────────────────────────────────────────
 function startDrag(i) {
   isDragging.value = true
-  dragFill.value = !filledCells.value.has(i)
+  const alreadyFilled = filledCells.value.has(i)
+  dragFill.value = !alreadyFilled
+
+  if (clusterMode.value) {
+    isDragging.value = false
+    const clusterSize = filledCells.value.size
+    if (!alreadyFilled) {
+      const target = clusterSize
+      if (target >= denominator.value) return
+      if (i === target) {
+        // Already adjacent — fill immediately, no animation
+        applyCell(target)
+      } else {
+        triggerFly(i, target)
+      }
+    } else {
+      // Clicking a filled cell → pop the last one off the cluster
+      dragFill.value = false
+      if (clusterSize > 0) {
+        const next = new Set(filledCells.value)
+        next.delete(clusterSize - 1)
+        filledCells.value = next
+        inputText.value = (next.size / denominator.value).toFixed(cfg.value.places)
+      }
+    }
+    return
+  }
+
   applyCell(i)
 }
 
 function onEnter(i) {
-  if (isDragging.value) applyCell(i)
+  if (isDragging.value && !clusterMode.value) applyCell(i)
 }
 
 function applyCell(i) {
@@ -162,7 +266,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
           <span class="whole-label">1 whole</span>
         </div>
 
-        <div class="grid-outer">
+        <div class="grid-outer" ref="gridOuterRef">
           <Transition name="grid-swap" mode="out-in">
             <div
               class="grid"
@@ -177,6 +281,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
               <div
                 v-for="i in denominator"
                 :key="i"
+                :ref="el => setCellRef(el, i - 1)"
                 class="cell"
                 :class="{ 'cell--filled': filledCells.has(i - 1) }"
                 @mousedown.prevent="startDrag(i - 1)"
@@ -184,6 +289,19 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
               />
             </div>
           </Transition>
+
+          <!-- Flying cell for cluster mode -->
+          <div
+            v-if="flyAnim"
+            class="fly-cell"
+            :class="{ 'fly-cell--moving': flyAnim.moving }"
+            :style="{
+              left:   flyAnim.x + 'px',
+              top:    flyAnim.y + 'px',
+              width:  flyAnim.w + 'px',
+              height: flyAnim.h + 'px',
+            }"
+          />
         </div>
 
         <!-- Quick hints below grid -->
@@ -267,6 +385,17 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
             <button class="quick-btn" @click="fillHalf">½</button>
             <button class="quick-btn" @click="fillQuarter">¼</button>
             <button class="quick-btn reset" @click="reset">Clear</button>
+          </div>
+        </div>
+
+        <!-- Cluster mode toggle -->
+        <div class="cluster-toggle" @click="clusterMode = !clusterMode" :class="{ 'cluster-toggle--on': clusterMode }">
+          <div class="cluster-toggle-text">
+            <span class="cluster-toggle-label">Keep cells together</span>
+            <span class="cluster-toggle-sub">{{ clusterMode ? 'Cells snap to the cluster' : 'Click any cell freely' }}</span>
+          </div>
+          <div class="toggle-pill">
+            <div class="toggle-knob" />
           </div>
         </div>
 
@@ -794,6 +923,104 @@ html, body {
   border-color: var(--navy);
   color: var(--white);
   box-shadow: 0 4px 12px rgba(20,33,61,0.2);
+}
+
+/* ── Flying cell ─────────────────────────────────────────────────────────── */
+.fly-cell {
+  position: absolute;
+  background: var(--cell-filled);
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 20;
+  box-shadow:
+    0 0 0 2px rgba(124,58,237,0.5),
+    0 4px 16px rgba(124,58,237,0.5);
+}
+
+.fly-cell--moving {
+  transition:
+    left   0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
+    top    0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: cell-fly 0.42s ease-out forwards;
+}
+
+@keyframes cell-fly {
+  0%   { box-shadow: 0 0 0 2px rgba(124,58,237,0.5), 0 4px 16px rgba(124,58,237,0.5); transform: scale(1.1); }
+  50%  { box-shadow: 0 0 0 4px rgba(124,58,237,0.3), 0 8px 28px rgba(124,58,237,0.4); transform: scale(1.15); }
+  100% { box-shadow: 0 0 0 2px rgba(124,58,237,0.5), 0 4px 16px rgba(124,58,237,0.5); transform: scale(1); }
+}
+
+/* ── Cluster toggle ───────────────────────────────────────────────────────── */
+.cluster-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--white);
+  border: 2px solid var(--tan);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.cluster-toggle:hover {
+  border-color: var(--cell-filled);
+}
+
+.cluster-toggle--on {
+  background: var(--blue-light);
+  border-color: var(--cell-filled);
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
+}
+
+.cluster-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cluster-toggle-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.cluster-toggle-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.toggle-pill {
+  width: 44px;
+  height: 24px;
+  background: var(--tan);
+  border-radius: 12px;
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.cluster-toggle--on .toggle-pill {
+  background: var(--cell-filled);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.cluster-toggle--on .toggle-knob {
+  transform: translateX(20px);
 }
 
 /* ── Fade transition ──────────────────────────────────────────────────────── */
