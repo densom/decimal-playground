@@ -5,7 +5,7 @@ import LcdExplorer from './components/LcdExplorer.vue'
 const activeTab = ref('explore') // 'explore' | 'lcd'
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const mode = ref('hundredths') // 'tenths' | 'hundredths' | 'thousandths'
+const mode = ref('hundredths') // 'fourths' | 'eighths' | 'sixteenths' | 'tenths' | 'hundredths' | 'thousandths'
 const filledCells = ref(new Set())
 const inputText = ref('')
 const isDragging = ref(false)
@@ -13,6 +13,9 @@ const dragFill = ref(true) // true = painting, false = erasing
 
 // ── Mode config ───────────────────────────────────────────────────────────────
 const MODES = {
+  fourths:     { denom: 4,    cols: 2,  rows: 2,   label: 'Fourths',     sub: '÷ 4',   places: 2 },
+  eighths:     { denom: 8,    cols: 2,  rows: 4,   label: 'Eighths',     sub: '÷ 8',   places: 3 },
+  sixteenths:  { denom: 16,   cols: 4,  rows: 4,   label: 'Sixteenths',  sub: '÷ 16',  places: 4 },
   tenths:      { denom: 10,   cols: 1,  rows: 10,  label: 'Tenths',      sub: '÷ 10',  places: 1 },
   hundredths:  { denom: 100,  cols: 10, rows: 10,  label: 'Hundredths',  sub: '÷ 100', places: 2 },
   thousandths: { denom: 1000, cols: 10, rows: 100, label: 'Thousandths', sub: '÷ 1000',places: 3 },
@@ -258,6 +261,11 @@ function reset() {
 //   - hundredths group = every 1 row → medium border (CSS), alternate tint per 10-row band
 function getCellClasses(i) {
   const classes = { 'cell--filled': filledCells.value.has(i) }
+
+  if (mode.value === 'sixteenths') {
+    // Alternate tint on odd rows (each row of 4 = 1 quarter)
+    if (Math.floor(i / 4) % 2 === 1) classes['cell--alt-tenth'] = true
+  }
 
   if (mode.value === 'hundredths') {
     // Alternate tint on odd tenth-rows so the 10 strips pop visually
@@ -636,6 +644,25 @@ html, body {
   user-select: none;
 }
 
+.grid--fourths {
+  gap: 4px;
+  padding: 4px;
+  border: 2px solid var(--navy);
+  background: var(--navy);
+}
+
+.grid--eighths {
+  gap: 0;
+  padding: 0;
+  border: 2px solid var(--navy);
+}
+
+.grid--sixteenths {
+  gap: 0;
+  padding: 0;
+  border: 2px solid var(--navy);
+}
+
 .grid--tenths {
   gap: 0;
   padding: 0;
@@ -671,6 +698,24 @@ html, body {
 }
 
 /* ── Grouping indicators ─────────────────────────────────────────────────── */
+
+/* Fourths: 2×2 — each cell is one quarter, use rounded corners for a "tile" feel */
+.grid--fourths .cell {
+  border-radius: 4px;
+  border: none;
+}
+
+/* Eighths: 2×4 — each row of 2 cells = 1 quarter → bold border after each row */
+.grid--eighths .cell {
+  border-bottom: 3px solid rgba(46, 16, 101, 0.5);
+  border-right: 1px solid rgba(46, 16, 101, 0.25);
+}
+
+/* Sixteenths: 4×4 — each row of 4 cells = 1 quarter → bold border after each row */
+.grid--sixteenths .cell {
+  border-bottom: 3px solid rgba(46, 16, 101, 0.5);
+  border-right: 1px solid rgba(46, 16, 101, 0.25);
+}
 
 /* Hundredths: each row of 10 cells = 1 tenth → bold bottom border on every row */
 .grid--hundredths .cell {
