@@ -43,8 +43,8 @@ const FracSquare = defineComponent({
       return h('div', {
         style: {
           display: 'grid',
-          width: `${props.size}px`,
-          height: `${props.size}px`,
+          width: '100%',
+          aspectRatio: '1',
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gridTemplateRows: `repeat(${rows}, 1fr)`,
           border: '2px solid #2E1065',
@@ -267,7 +267,7 @@ const PURPLE_B = '#DB2777'
 .lcd-intro strong { color: #7C3AED; }
 
 /* Fraction cards */
-.fractions-row { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.fractions-row { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
 
 .frac-card {
   background: white;
@@ -277,7 +277,7 @@ const PURPLE_B = '#DB2777'
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  width: 200px;
+  width: clamp(140px, 28vw, 200px);
   box-shadow: 0 4px 20px rgba(46,16,101,0.1);
 }
 .frac-card--a { border-top: 4px solid #7C3AED; }
@@ -352,6 +352,7 @@ const PURPLE_B = '#DB2777'
   background: white; border-radius: 16px; padding: 20px;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   box-shadow: 0 4px 20px rgba(46,16,101,0.1);
+  width: clamp(160px, 38vw, 260px);
 }
 
 .equiv-transform { display: flex; align-items: center; gap: 8px; font-family: 'Fredoka One', cursive; font-size: 22px; }
@@ -386,4 +387,18 @@ const PURPLE_B = '#DB2777'
 /* Transition */
 .result-slide-enter-active { transition: opacity 0.4s ease, transform 0.4s ease; }
 .result-slide-enter-from { opacity: 0; transform: translateY(16px); }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .lcd { padding: 16px; gap: 20px; }
+  .lcd-intro h2 { font-size: 24px; }
+  .lcd-intro p { font-size: 13px; }
+  .frac-card { width: clamp(120px, 36vw, 180px); padding: 14px; }
+  .center-op { display: none; }
+  .lcd-badge { padding: 16px 24px; }
+  .lcd-badge-number { font-size: 52px; }
+  .equiv-card { width: clamp(140px, 42vw, 200px); padding: 14px; }
+  .addition-bonus { flex-direction: column; text-align: center; gap: 6px; }
+  .find-btn { width: 100%; }
+}
 </style>
