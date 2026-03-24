@@ -307,7 +307,9 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
     </header>
 
     <!-- ── LCD tab ────────────────────────────────────────────────── -->
-    <LcdExplorer v-if="activeTab === 'lcd'" />
+    <div v-if="activeTab === 'lcd'" class="lcd-scroll">
+      <LcdExplorer />
+    </div>
 
     <!-- ── Main layout ────────────────────────────────────────────── -->
     <template v-if="activeTab === 'explore'">
@@ -578,6 +580,13 @@ html, body {
   margin-top: 2px;
   letter-spacing: 1px;
   text-transform: uppercase;
+}
+
+/* ── LCD scroll wrapper ───────────────────────────────────────────────────── */
+.lcd-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ── Layout ───────────────────────────────────────────────────────────────── */
