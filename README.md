@@ -1,5 +1,8 @@
 # Decimal Playground
 
+**Live site: [https://apps.dennissomerville.net/decimals](https://apps.dennissomerville.net/decimals)**
+Hosted as a static site on [Render](https://render.com).
+
 An interactive tool that helps 5th graders visualize and understand decimals and fractions through hands-on grid exploration.
 
 ## Features
