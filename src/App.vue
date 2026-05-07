@@ -4,6 +4,10 @@ import LcdExplorer from './components/LcdExplorer.vue'
 
 const activeTab = ref('explore') // 'explore' | 'lcd'
 
+watch(activeTab, (tab) => {
+  if (typeof window.gtag === 'function') window.gtag('event', 'tab_switch', { tab })
+})
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const mode = ref('hundredths') // 'fourths' | 'eighths' | 'sixteenths' | 'tenths' | 'hundredths' | 'thousandths'
 const filledCells = ref(new Set())
