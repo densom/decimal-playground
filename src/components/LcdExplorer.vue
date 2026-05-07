@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, h, defineComponent } from 'vue'
+import { trackEvent } from '../analytics.js'
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 function gcd(a, b) { return b === 0 ? a : gcd(b, a % b) }
@@ -107,9 +108,15 @@ function findLcd() {
     }
   }
   animKey.value++
+  trackEvent('lcd_calculated', {
+    fraction_a: `${fracA.value.n}/${fracA.value.d}`,
+    fraction_b: `${fracB.value.n}/${fracB.value.d}`,
+    lcd: result.value.lcd,
+  })
 }
 
 function reset() {
+  trackEvent('lcd_reset')
   result.value = null
   inputA.value = { n: '1', d: '3' }
   inputB.value = { n: '1', d: '4' }

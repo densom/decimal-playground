@@ -1,11 +1,12 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import LcdExplorer from './components/LcdExplorer.vue'
+import { trackEvent } from './analytics.js'
 
 const activeTab = ref('explore') // 'explore' | 'lcd'
 
 watch(activeTab, (tab) => {
-  if (typeof window.gtag === 'function') window.gtag('event', 'tab_switch', { tab })
+  trackEvent('tab_view', { tab_name: tab })
 })
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ const simplified = computed(() => {
 // ── Mode switching ────────────────────────────────────────────────────────────
 function setMode(m) {
   if (m === mode.value) return
+  trackEvent('grid_mode_changed', { mode: m, previous_mode: mode.value })
   const oldDenom = denominator.value
   const count = filledCells.value.size
   mode.value = m
@@ -109,6 +111,7 @@ function cancelFly() {
 }
 
 async function triggerFly(fromIdx, toIdx) {
+  trackEvent('fly_animation_triggered', { mode: mode.value })
   const fromEl = cellRefs.value[fromIdx]
   const toEl   = cellRefs.value[toIdx]
   const grid   = gridOuterRef.value
@@ -163,7 +166,10 @@ async function triggerFly(fromIdx, toIdx) {
 }
 
 // ── Cell interaction ──────────────────────────────────────────────────────────
+let dragStartCount = 0
+
 function startDrag(i) {
+  dragStartCount = filledCells.value.size
   isDragging.value = true
   const alreadyFilled = filledCells.value.has(i)
   dragFill.value = !alreadyFilled
@@ -208,7 +214,14 @@ function applyCell(i) {
   inputText.value = (filledCells.value.size / denominator.value).toFixed(cfg.value.places)
 }
 
-function stopDrag() { isDragging.value = false }
+function stopDrag() {
+  if (!clusterMode.value) {
+    const delta = filledCells.value.size - dragStartCount
+    if (delta > 0) trackEvent('grid_painted', { cells_added: delta, mode: mode.value, cluster_mode: false })
+    if (delta < 0) trackEvent('grid_erased', { cells_removed: -delta, mode: mode.value })
+  }
+  isDragging.value = false
+}
 
 // ── Typed input ───────────────────────────────────────────────────────────────
 function applyInput() {
@@ -225,6 +238,8 @@ function applyInput() {
 
   if (isNaN(val) || val < 0 || val > 1) return
 
+  trackEvent('value_submitted', { value: String(val), format: fracMatch ? 'fraction' : 'decimal', mode: mode.value })
+
   const count = Math.round(val * denominator.value)
   const next = new Set()
   for (let i = 0; i < count; i++) next.add(i)
@@ -238,6 +253,7 @@ function handleInputKey(e) {
 
 // ── Convenience fills ─────────────────────────────────────────────────────────
 function fillHalf() {
+  trackEvent('quick_fill_used', { fraction: '1/2', mode: mode.value })
   const half = Math.round(denominator.value / 2)
   const next = new Set()
   for (let i = 0; i < half; i++) next.add(i)
@@ -246,6 +262,7 @@ function fillHalf() {
 }
 
 function fillQuarter() {
+  trackEvent('quick_fill_used', { fraction: '1/4', mode: mode.value })
   const q = Math.round(denominator.value / 4)
   const next = new Set()
   for (let i = 0; i < q; i++) next.add(i)
@@ -254,8 +271,14 @@ function fillQuarter() {
 }
 
 function reset() {
+  trackEvent('grid_cleared', { cells_cleared: filledCells.value.size, mode: mode.value })
   filledCells.value = new Set()
   inputText.value = ''
+}
+
+function toggleCluster() {
+  clusterMode.value = !clusterMode.value
+  trackEvent('cluster_mode_toggled', { enabled: clusterMode.value, mode: mode.value })
 }
 
 // ── Cell visual grouping ──────────────────────────────────────────────────────
@@ -398,7 +421,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', stopDrag))
 
             <div class="gc-divider" />
 
-            <div class="cluster-toggle" @click="clusterMode = !clusterMode" :class="{ 'cluster-toggle--on': clusterMode }">
+            <div class="cluster-toggle" @click="toggleCluster" :class="{ 'cluster-toggle--on': clusterMode }">
               <div class="cluster-toggle-text">
                 <span class="cluster-toggle-label">Keep together</span>
                 <span class="cluster-toggle-sub">{{ clusterMode ? 'On' : 'Off' }}</span>
